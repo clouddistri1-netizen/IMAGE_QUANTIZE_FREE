@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Quantizer</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-main: #e0e0e0;
+            --text-sec: #a0a0a0;
+            --accent: #bb86fc;
+            --accent-hover: #995dd8;
+            --border: #333;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        h1 { margin-bottom: 30px; color: var(--accent); }
+
+        .controls {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+            border: 1px solid var(--border);
+        }
+
+        input[type="file"] {
+            color: var(--text-sec);
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="number"] {
+            background: #2c2c2c;
+            border: 1px solid var(--border);
+            color: white;
+            padding: 8px;
+            border-radius: 6px;
+            width: 60px;
+        }
+
+        button, .btn-download {
+            background-color: var(--accent);
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        button:hover, .btn-download:hover {
+            background-color: var(--accent-hover);
+        }
+
+        .btn-download.disabled {
+            background-color: #444;
+            color: #777;
+            pointer-events: none;
+        }
+
+        .preview-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        .image-box {
+            background-color: var(--card-bg);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .image-box h3 { margin-top: 0; color: var(--text-sec); font-size: 0.9rem; }
+
+        img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            display: block;
+            margin: 0 auto;
+            max-height: 500px;
+            object-fit: contain;
+        }
+
+        /* Loading Spinner */
+        .loader {
+            border: 4px solid #333;
+            border-top: 4px solid var(--accent);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        @media (max-width: 768px) {
+            .preview-container { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Image Quantizer</h1>
+
+    <div class="controls">
+        <div class="input-group">
+            <input type="file" id="imageInput" accept="image/*">
+        </div>
+        
+        <div class="input-group">
+            <label for="colorCount">Cores:</label>
+            <input type="number" id="colorCount" value="2" min="1" max="256">
+        </div>
+
+        <a id="downloadLink" class="btn-download disabled" download="quantized_image.png">Download</a>
+    </div>
+
+    <div class="loader" id="loader"></div>
+
+    <div class="preview-container" id="previewArea" style="opacity: 0.3;">
+        <div class="image-box">
+            <h3>Original</h3>
+            <img id="originalImg" src="https://via.placeholder.com/400x300?text=Upload+Image" alt="Original">
+        </div>
+        <div class="image-box">
+            <h3>Quantizada</h3>
+            <img id="quantizedImg" src="https://via.placeholder.com/400x300?text=Preview" alt="Quantized">
+        </div>
+    </div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const colorCount = document.getElementById('colorCount');
+        const originalImg = document.getElementById('originalImg');
+        const quantizedImg = document.getElementById('quantizedImg');
+        const downloadLink = document.getElementById('downloadLink');
+        const loader = document.getElementById('loader');
+        const previewArea = document.getElementById('previewArea');
+
+        let currentFile = null;
+
+        // Quando o user seleciona uma imagem
+        imageInput.addEventListener('change', function(e) {
+            if (e.target.files && e.target.files[0]) {
+                currentFile = e.target.files[0];
+                
+                // Mostrar preview da original
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    originalImg.src = evt.target.result;
+                    previewArea.style.opacity = "1";
+                    processImage(); // Processar imediatamente
+                }
+                reader.readAsDataURL(currentFile);
+            }
+        });
+
+        // Quando o user muda o número de cores
+        colorCount.addEventListener('change', processImage);
+        colorCount.addEventListener('keyup', processImage); // Para inputs manuais
+
+        async function processImage() {
+            if (!currentFile) return;
+
+            const colors = colorCount.value;
+            if (colors < 1 || colors > 256) return;
+
+            // UI Loading state
+            loader.style.display = 'block';
+            quantizedImg.style.opacity = '0.5';
+
+            const formData = new FormData();
+            formData.append('image', currentFile);
+            formData.append('colors', colors);
+
+            try {
+                const response = await fetch('/quantize', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.image) {
+                    quantizedImg.src = data.image;
+                    downloadLink.href = data.image;
+                    downloadLink.classList.remove('disabled');
+                } else {
+                    alert('Erro ao processar imagem');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            } finally {
+                loader.style.display = 'none';
+                quantizedImg.style.opacity = '1';
+            }
+        }
+    </script>
+</body>
+</html>
