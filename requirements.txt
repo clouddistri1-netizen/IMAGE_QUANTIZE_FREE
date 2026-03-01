@@ -1,2 +1,5 @@
 Flask
 Pillow
+numpy
+scikit-learn
+scikit-image
